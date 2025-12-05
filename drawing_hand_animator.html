@@ -501,27 +501,65 @@
         <div class="settings-section">
             <h3>📁 画像設定</h3>
             
+            <div class="info-text" style="margin-bottom: 20px; padding: 15px; background: rgba(255, 165, 0, 0.1); border-left: 3px solid #ff9800;">
+                <strong>⚠️ 重要：OBSで使用する場合</strong><br>
+                このHTMLファイルと同じフォルダに以下の画像ファイルを配置してください：<br>
+                ・<code>hand.png</code> - 手+ペンの画像<br>
+                ・<code>tablet.png</code> - タブレットの画像<br>
+                <br>
+                複数パターン使いたい場合はURLパラメータで指定：<br>
+                <code>?hand=hand2.png&tablet=tablet2.png</code>
+            </div>
+
             <div class="setting-item">
-                <label>手+ペンの画像（透過PNG推奨）</label>
-                <input type="file" id="hand-upload" accept="image/png,image/webp">
-                <div class="preview-container" id="hand-preview">
-                    <div class="no-image-text">画像を選択してください</div>
-                </div>
+                <label>手+ペンの画像ファイル名</label>
+                <input type="text" id="hand-filename" value="hand.png" 
+                       style="width: 100%; padding: 10px; background: rgba(255, 255, 255, 0.1); 
+                              border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; 
+                              color: #fff; font-size: 13px;">
                 <div class="info-text">
-                    💡 ペンを持った手の画像をアップロード<br>
-                    推奨サイズ: 300×400px程度
+                    このHTMLと同じフォルダにある画像ファイル名を指定
                 </div>
             </div>
 
             <div class="setting-item">
-                <label>タブレット画像（透過PNG推奨）</label>
-                <input type="file" id="tablet-upload" accept="image/png,image/webp">
-                <div class="preview-container" id="tablet-preview">
-                    <div class="no-image-text">画像を選択してください</div>
+                <label>タブレット画像ファイル名</label>
+                <input type="text" id="tablet-filename" value="tablet.png"
+                       style="width: 100%; padding: 10px; background: rgba(255, 255, 255, 0.1); 
+                              border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; 
+                              color: #fff; font-size: 13px;">
+                <div class="info-text">
+                    このHTMLと同じフォルダにある画像ファイル名を指定
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn" id="reload-images">画像を再読み込み</button>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+
+            <div class="setting-item">
+                <label>🧪 テスト用：画像アップロード（OBSでは使えません）</label>
+                <input type="file" id="hand-upload" accept="image/png,image/webp">
+                <div class="preview-container" id="hand-preview">
+                    <div class="no-image-text">ブラウザでのテスト表示用</div>
                 </div>
                 <div class="info-text">
-                    💡 タブレット背面の画像をアップロード<br>
-                    推奨サイズ: 400×300px程度
+                    ⚠️ この機能はブラウザでのテスト用です。<br>
+                    OBSでは反映されません。実際の画像はファイルで配置してください。
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>🧪 テスト用：タブレットアップロード（OBSでは使えません）</label>
+                <input type="file" id="tablet-upload" accept="image/png,image/webp">
+                <div class="preview-container" id="tablet-preview">
+                    <div class="no-image-text">ブラウザでのテスト表示用</div>
+                </div>
+                <div class="info-text">
+                    ⚠️ この機能はブラウザでのテスト用です。<br>
+                    OBSでは反映されません。実際の画像はファイルで配置してください。
                 </div>
             </div>
         </div>
@@ -842,6 +880,9 @@
             statusBar: document.getElementById('status-bar'),
             
             // 設定入力
+            handFilename: document.getElementById('hand-filename'),
+            tabletFilename: document.getElementById('tablet-filename'),
+            reloadImages: document.getElementById('reload-images'),
             handUpload: document.getElementById('hand-upload'),
             tabletUpload: document.getElementById('tablet-upload'),
             sensitivity: document.getElementById('sensitivity'),
@@ -976,7 +1017,50 @@
         }
 
         function showNotification(message, type = 'success') {
-            // 簡易通知（将来的にトースト通知を実装可能）
+            // 簡易通知（コンソール + 将来的にトースト通知も可能）
+            const prefix = type === 'error' ? '❌' : type === 'warning' ? '⚠️' : '✅';
+            console.log(`${prefix} ${message}`);
+            
+            // ステータスバーに一時表示
+            if (elements.statusBar) {
+                const statusText = elements.statusBar.querySelector('.status-item');
+                if (statusText) {
+                    const originalText = statusText.innerHTML;
+                    statusText.innerHTML = `<span class="status-label">${prefix}</span> ${message}`;
+                    setTimeout(() => {
+                        statusText.innerHTML = originalText;
+                    }, 3000);
+                }
+            }
+        }
+
+        // ================== 設定保存（プリセット対応） ==================
+        function saveToLocalStorage() {
+            const urlParams = getUrlParams();
+            const storageKey = urlParams.preset ? `drawingHandPreset_${urlParams.preset}` : 'drawingHandSettings';
+            
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(settings));
+                showNotification('設定を保存しました');
+            } catch (e) {
+                console.error('保存エラー:', e);
+                showNotification('保存に失敗しました', 'error');
+            }
+        }
+
+        function loadFromLocalStorage() {
+            const urlParams = getUrlParams();
+            const storageKey = urlParams.preset ? `drawingHandPreset_${urlParams.preset}` : 'drawingHandSettings';
+            
+            try {
+                const savedSettings = localStorage.getItem(storageKey);
+                if (savedSettings) {
+                    settings = { ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) };
+                }
+            } catch (e) {
+                console.error('読み込みエラー:', e);
+            }
+        }簡易通知（将来的にトースト通知を実装可能）
             console.log(`[${type}] ${message}`);
         }
 
@@ -1101,6 +1185,11 @@
         elements.startAnimatorBtn.addEventListener('click', () => {
             elements.initialSetup.classList.add('hidden');
             updateAnimation();
+        });
+
+        // 画像ファイル名と再読み込み
+        elements.reloadImages.addEventListener('click', () => {
+            loadImages();
         });
 
         elements.handUpload.addEventListener('change', (e) => {
@@ -1230,9 +1319,118 @@
             }
         });
 
+        // ================== URLパラメータ取得 ==================
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                hand: params.get('hand') || null,
+                tablet: params.get('tablet') || null,
+                preset: params.get('preset') || null
+            };
+        }
+
+        // ================== 画像ファイル名の取得 ==================
+        function getImageFilenames() {
+            const urlParams = getUrlParams();
+            return {
+                hand: urlParams.hand || elements.handFilename.value || 'hand.png',
+                tablet: urlParams.tablet || elements.tabletFilename.value || 'tablet.png'
+            };
+        }
+
+        // ================== 画像の読み込み ==================
+        function loadImages() {
+            const filenames = getImageFilenames();
+            
+            // 手の画像を読み込み
+            const handImg = new Image();
+            handImg.onload = () => {
+                elements.hand.src = filenames.hand;
+                elements.hand.style.display = 'block';
+                state.handImage = filenames.hand;
+                console.log('✅ 手の画像を読み込みました:', filenames.hand);
+                showNotification('手の画像を読み込みました');
+            };
+            handImg.onerror = () => {
+                console.error('❌ 手の画像が見つかりません:', filenames.hand);
+                elements.hand.style.display = 'none';
+                showNotification(`手の画像が見つかりません: ${filenames.hand}`, 'error');
+            };
+            handImg.src = filenames.hand;
+            
+            // タブレット画像を読み込み
+            const tabletImg = new Image();
+            tabletImg.onload = () => {
+                elements.tablet.src = filenames.tablet;
+                elements.tablet.style.display = 'block';
+                state.tabletImage = filenames.tablet;
+                console.log('✅ タブレット画像を読み込みました:', filenames.tablet);
+                showNotification('タブレット画像を読み込みました');
+            };
+            tabletImg.onerror = () => {
+                console.error('❌ タブレット画像が見つかりません:', filenames.tablet);
+                elements.tablet.style.display = 'none';
+                showNotification(`タブレット画像が見つかりません: ${filenames.tablet}`, 'error');
+            };
+            tabletImg.src = filenames.tablet;
+            
+            updateVisibility();
+        }
+
+        // ================== プリセット読み込み ==================
+        function loadPresetSettings() {
+            const urlParams = getUrlParams();
+            if (!urlParams.preset) return;
+            
+            // プリセット名をLocalStorageのキーとして使用
+            const presetKey = `drawingHandPreset_${urlParams.preset}`;
+            try {
+                const savedSettings = localStorage.getItem(presetKey);
+                if (savedSettings) {
+                    settings = { ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) };
+                    console.log('✅ プリセットを読み込みました:', urlParams.preset);
+                }
+            } catch (e) {
+                console.error('❌ プリセット読み込みエラー:', e);
+            }
+        }
+
+        // ================== 画像アップロード（テスト用） ==================
+        function handleImageUpload(type, file) {
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target.result;
+                
+                if (type === 'hand') {
+                    elements.hand.src = dataUrl;
+                    elements.hand.style.display = 'block';
+                    state.handImage = dataUrl;
+                    updatePreview('hand', dataUrl);
+                } else {
+                    elements.tablet.src = dataUrl;
+                    elements.tablet.style.display = 'block';
+                    state.tabletImage = dataUrl;
+                    updatePreview('tablet', dataUrl);
+                }
+                
+                updateVisibility();
+                showNotification(`${type === 'hand' ? '手' : 'タブレット'}の画像をテスト表示しました（OBSでは使えません）`, 'warning');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updatePreview(type, dataUrl) {
+            const previewContainer = type === 'hand' ? elements.handPreview : elements.tabletPreview;
+            previewContainer.innerHTML = `<img src="${dataUrl}" class="preview-image" alt="${type} preview">`;
+        }
         // ================== 初期化 ==================
         window.addEventListener('load', () => {
+            loadPresetSettings();
             loadFromLocalStorage();
+            updateUIFromSettings();
+            loadImages();
         });
 
         // OBSブラウザソース用の自動開始
