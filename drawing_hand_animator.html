@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drawing Hand Animator - お絵かき手元アニメーション</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: transparent;
+            cursor: none;
+        }
+
+        /* メインキャンバス */
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            pointer-events: none;
+        }
+
+        /* タブレット画像 */
+        #tablet {
+            position: absolute;
+            pointer-events: none;
+            z-index: 1;
+            transition: transform 0.1s ease-out;
+            transform-origin: center center;
+            display: none;
+        }
+
+        /* 手+ペン画像 */
+        #hand {
+            position: absolute;
+            pointer-events: none;
+            z-index: 2;
+            transition: transform 0.1s ease-out;
+            transform-origin: center center;
+            display: none;
+        }
+
+        /* 設定パネル */
+        #settings-panel {
+            position: fixed;
+            top: 0;
+            right: -450px;
+            width: 450px;
+            height: 100vh;
+            background: rgba(30, 30, 30, 0.98);
+            color: #fff;
+            padding: 25px;
+            overflow-y: auto;
+            transition: right 0.3s ease;
+            z-index: 10000;
+            box-shadow: -3px 0 15px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+        }
+
+        #settings-panel.open {
+            right: 0;
+        }
+
+        #settings-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #settings-panel::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #settings-panel::-webkit-scrollbar-thumb {
+            background: #4da6ff;
+            border-radius: 4px;
+        }
+
+        #settings-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(40, 40, 40, 0.95);
+            color: #fff;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            z-index: 9999;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            pointer-events: auto;
+        }
+
+        #settings-toggle:hover {
+            background: rgba(60, 60, 60, 0.95);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .panel-header {
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #4da6ff;
+        }
+
+        .panel-header h2 {
+            font-size: 20px;
+            color: #4da6ff;
+            margin-bottom: 8px;
+        }
+
+        .panel-header p {
+            font-size: 13px;
+            color: #999;
+            line-height: 1.5;
+        }
+
+        .settings-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 3px solid #4da6ff;
+        }
+
+        .settings-section h3 {
+            margin-bottom: 18px;
+            font-size: 16px;
+            color: #4da6ff;
+            font-weight: 600;
+        }
+
+        .setting-item {
+            margin-bottom: 20px;
+        }
+
+        .setting-item label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #ccc;
+            font-weight: 500;
+        }
+
+        .setting-item input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .setting-item input[type="file"]::file-selector-button {
+            background: #4da6ff;
+            color: #fff;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            transition: background 0.2s;
+        }
+
+        .setting-item input[type="file"]::file-selector-button:hover {
+            background: #3d8acc;
+        }
+
+        .setting-item input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .setting-item input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4da6ff;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s;
+        }
+
+        .setting-item input[type="range"]::-webkit-slider-thumb:hover {
+            background: #3d8acc;
+            transform: scale(1.1);
+        }
+
+        .setting-item input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4da6ff;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .setting-item input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 13px;
+        }
+
+        .setting-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            cursor: pointer;
+            accent-color: #4da6ff;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+        }
+
+        .checkbox-wrapper label {
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .value-display {
+            display: inline-block;
+            margin-left: 12px;
+            color: #4da6ff;
+            font-weight: bold;
+            min-width: 50px;
+            font-size: 14px;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .slider-container input[type="range"] {
+            flex: 1;
+        }
+
+        .info-text {
+            font-size: 12px;
+            color: #888;
+            line-height: 1.5;
+            margin-top: 6px;
+            padding: 8px 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+        }
+
+        .preview-container {
+            position: relative;
+            width: 100%;
+            height: 180px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 6px;
+            margin-top: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+        }
+
+        .preview-image {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+
+        .no-image-text {
+            color: #666;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 12px;
+            background: #4da6ff;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:hover {
+            background: #3d8acc;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-full {
+            grid-column: 1 / -1;
+        }
+
+        /* 初期セットアップ画面 */
+        #initial-setup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.96);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20000;
+            pointer-events: auto;
+        }
+
+        #initial-setup.hidden {
+            display: none;
+        }
+
+        .setup-content {
+            background: rgba(40, 40, 40, 0.98);
+            padding: 50px;
+            border-radius: 12px;
+            max-width: 700px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .setup-content h2 {
+            color: #4da6ff;
+            margin-bottom: 25px;
+            font-size: 28px;
+        }
+
+        .setup-content p {
+            color: #ccc;
+            line-height: 1.8;
+            margin-bottom: 25px;
+            font-size: 15px;
+        }
+
+        .setup-step {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid #4da6ff;
+        }
+
+        .setup-step h4 {
+            color: #fff;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+
+        .setup-step ul {
+            margin-left: 20px;
+            color: #aaa;
+            line-height: 1.6;
+        }
+
+        #start-animator-btn {
+            width: 100%;
+            padding: 18px;
+            background: #4da6ff;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(77, 166, 255, 0.3);
+        }
+
+        #start-animator-btn:hover {
+            background: #3d8acc;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(77, 166, 255, 0.4);
+        }
+
+        /* ステータス表示 */
+        #status-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(40, 40, 40, 0.9);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 12px;
+            z-index: 9998;
+            display: none;
+            pointer-events: none;
+        }
+
+        #status-bar.show {
+            display: block;
+        }
+
+        .status-item {
+            margin: 3px 0;
+        }
+
+        .status-label {
+            color: #4da6ff;
+            font-weight: bold;
+        }
+
+        /* アニメーション */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .settings-section {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            #settings-panel {
+                width: 100%;
+                right: -100%;
+            }
+
+            .setup-content {
+                padding: 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- メインキャンバス -->
+    <div id="canvas-container">
+        <img id="tablet" alt="Tablet">
+        <img id="hand" alt="Hand with Pen">
+    </div>
+
+    <!-- 設定トグルボタン -->
+    <button id="settings-toggle">⚙️ 設定</button>
+
+    <!-- 設定パネル -->
+    <div id="settings-panel">
+        <div class="panel-header">
+            <h2>🎨 お絵かき手元アニメーション</h2>
+            <p>マウス/ペンタブの動きに連動して手元を表示</p>
+        </div>
+
+        <!-- 基本設定 -->
+        <div class="settings-section">
+            <h3>📁 画像設定</h3>
+            
+            <div class="setting-item">
+                <label>手+ペンの画像（透過PNG推奨）</label>
+                <input type="file" id="hand-upload" accept="image/png,image/webp">
+                <div class="preview-container" id="hand-preview">
+                    <div class="no-image-text">画像を選択してください</div>
+                </div>
+                <div class="info-text">
+                    💡 ペンを持った手の画像をアップロード<br>
+                    推奨サイズ: 300×400px程度
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>タブレット画像（透過PNG推奨）</label>
+                <input type="file" id="tablet-upload" accept="image/png,image/webp">
+                <div class="preview-container" id="tablet-preview">
+                    <div class="no-image-text">画像を選択してください</div>
+                </div>
+                <div class="info-text">
+                    💡 タブレット背面の画像をアップロード<br>
+                    推奨サイズ: 400×300px程度
+                </div>
+            </div>
+        </div>
+
+        <!-- 動作設定 -->
+        <div class="settings-section">
+            <h3>🎮 動作設定</h3>
+            
+            <div class="setting-item">
+                <label>感度（カーソル追従の速さ）</label>
+                <div class="slider-container">
+                    <input type="range" id="sensitivity" min="0.1" max="3" step="0.1" value="1">
+                    <span class="value-display" id="sensitivity-value">1.0</span>
+                </div>
+                <div class="info-text">
+                    小さい値：ゆっくり動く / 大きい値：速く動く
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="smooth-movement" checked>
+                    <label for="smooth-movement">スムージング（滑らかな動き）</label>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>スムージング強度</label>
+                <div class="slider-container">
+                    <input type="range" id="smoothness" min="0.1" max="0.9" step="0.05" value="0.3">
+                    <span class="value-display" id="smoothness-value">0.30</span>
+                </div>
+                <div class="info-text">
+                    小さい値：ダイレクト / 大きい値：ヌルヌル
+                </div>
+            </div>
+        </div>
+
+        <!-- ペンアニメーション -->
+        <div class="settings-section">
+            <h3>✏️ ペンアニメーション</h3>
+            
+            <div class="setting-item">
+                <label>ペンの傾き角度（度）</label>
+                <div class="slider-container">
+                    <input type="range" id="tilt-angle" min="0" max="45" step="1" value="15">
+                    <span class="value-display" id="tilt-angle-value">15°</span>
+                </div>
+                <div class="info-text">
+                    描画中にペンが左右に揺れる角度（0=揺れなし）
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>ペンの揺れ速度</label>
+                <div class="slider-container">
+                    <input type="range" id="tilt-speed" min="1" max="30" step="1" value="10">
+                    <span class="value-display" id="tilt-speed-value">10</span>
+                </div>
+                <div class="info-text">
+                    揺れる速さ（小さい値：ゆっくり / 大きい値：速い）
+                </div>
+            </div>
+        </div>
+
+        <!-- 位置調整 -->
+        <div class="settings-section">
+            <h3>📐 位置調整</h3>
+            
+            <div class="setting-item">
+                <label>X座標オフセット</label>
+                <div class="slider-container">
+                    <input type="range" id="offset-x" min="-500" max="500" step="10" value="0">
+                    <span class="value-display" id="offset-x-value">0</span>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>Y座標オフセット</label>
+                <div class="slider-container">
+                    <input type="range" id="offset-y" min="-500" max="500" step="10" value="0">
+                    <span class="value-display" id="offset-y-value">0</span>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>手の画像サイズ</label>
+                <div class="slider-container">
+                    <input type="range" id="hand-scale" min="0.3" max="3" step="0.1" value="1">
+                    <span class="value-display" id="hand-scale-value">1.0x</span>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>タブレット画像サイズ</label>
+                <div class="slider-container">
+                    <input type="range" id="tablet-scale" min="0.3" max="3" step="0.1" value="1">
+                    <span class="value-display" id="tablet-scale-value">1.0x</span>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>タブレットの縦位置オフセット</label>
+                <div class="slider-container">
+                    <input type="range" id="tablet-offset-y" min="-200" max="200" step="10" value="50">
+                    <span class="value-display" id="tablet-offset-y-value">50</span>
+                </div>
+                <div class="info-text">
+                    手とタブレットの上下位置関係を調整
+                </div>
+            </div>
+        </div>
+
+        <!-- 画面端制限 -->
+        <div class="settings-section">
+            <h3>🔲 画面端制限</h3>
+            
+            <div class="setting-item">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="enable-limits">
+                    <label for="enable-limits">画面端制限を有効化</label>
+                </div>
+                <div class="info-text">
+                    手やタブレットが画面からはみ出さないように制限
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>左端の制限 (X座標の最小値)</label>
+                <div class="slider-container">
+                    <input type="range" id="limit-left" min="0" max="960" step="10" value="0">
+                    <span class="value-display" id="limit-left-value">0</span>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>右端の制限 (X座標の最大値)</label>
+                <div class="slider-container">
+                    <input type="range" id="limit-right" min="960" max="1920" step="10" value="1920">
+                    <span class="value-display" id="limit-right-value">1920</span>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>上端の制限 (Y座標の最小値)</label>
+                <div class="slider-container">
+                    <input type="range" id="limit-top" min="0" max="540" step="10" value="0">
+                    <span class="value-display" id="limit-top-value">0</span>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>下端の制限 (Y座標の最大値)</label>
+                <div class="slider-container">
+                    <input type="range" id="limit-bottom" min="540" max="1080" step="10" value="1080">
+                    <span class="value-display" id="limit-bottom-value">1080</span>
+                </div>
+            </div>
+
+            <div class="info-text">
+                💡 デフォルト値（1920×1080）から調整してください。<br>
+                複数モニターや特殊な解像度の場合は手動で調整が必要です。
+            </div>
+        </div>
+
+        <!-- 表示設定 -->
+        <div class="settings-section">
+            <h3>👁️ 表示設定</h3>
+            
+            <div class="setting-item">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="show-hand" checked>
+                    <label for="show-hand">手を表示</label>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="show-tablet" checked>
+                    <label for="show-tablet">タブレットを表示</label>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="show-status" checked>
+                    <label for="show-status">ステータス表示（デバッグ用）</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- アクション -->
+        <div class="settings-section">
+            <h3>💾 設定管理</h3>
+            
+            <div class="button-group">
+                <button class="btn btn-full" id="save-settings">設定を保存</button>
+                <button class="btn btn-secondary" id="reset-settings">リセット</button>
+                <button class="btn btn-secondary" id="clear-images">画像をクリア</button>
+            </div>
+        </div>
+
+        <!-- 情報 -->
+        <div class="settings-section">
+            <h3>ℹ️ 情報</h3>
+            <div class="info-text">
+                <strong>バージョン:</strong> 1.0.0<br>
+                <strong>対応ブラウザ:</strong> Chrome, Edge, Firefox<br>
+                <strong>推奨解像度:</strong> 1920×1080以上<br>
+                <br>
+                <strong>使い方:</strong><br>
+                1. 手とタブレットの画像をアップロード<br>
+                2. OBSで「ブラウザ」ソースとして追加<br>
+                3. 「カスタムCSS」で背景を透過<br>
+                <code>body { background-color: rgba(0, 0, 0, 0); }</code>
+            </div>
+        </div>
+    </div>
+
+    <!-- ステータスバー -->
+    <div id="status-bar">
+        <div class="status-item">
+            <span class="status-label">マウス:</span>
+            <span id="status-mouse">-</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">描画中:</span>
+            <span id="status-drawing">-</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">回転:</span>
+            <span id="status-rotation">-</span>
+        </div>
+    </div>
+
+    <!-- 初期セットアップ -->
+    <div id="initial-setup">
+        <div class="setup-content">
+            <h2>🎨 お絵かき手元アニメーション</h2>
+            <p>
+                お絵かき配信で手元を表示するためのアニメーションツールです。<br>
+                マウス/ペンタブの動きに連動して、リアルタイムで手元が動きます。
+            </p>
+
+            <div class="setup-step">
+                <h4>📝 使い方</h4>
+                <ul>
+                    <li>右上の「⚙️ 設定」ボタンから画像をアップロード</li>
+                    <li>ペンを持った手の画像（透過PNG）</li>
+                    <li>タブレット背面の画像（透過PNG）</li>
+                    <li>各種パラメータを調整して完成！</li>
+                </ul>
+            </div>
+
+            <div class="setup-step">
+                <h4>🎬 OBSでの使用方法</h4>
+                <ul>
+                    <li>OBSで「ブラウザ」ソースを追加</li>
+                    <li>このHTMLファイルのパスを指定</li>
+                    <li>幅: 1920, 高さ: 1080（推奨）</li>
+                    <li>「シャットダウン時にブラウザを更新」をON</li>
+                </ul>
+            </div>
+
+            <button id="start-animator-btn">開始する</button>
+        </div>
+    </div>
+
+    <script>
+        // ================== 設定管理 ==================
+        const DEFAULT_SETTINGS = {
+            sensitivity: 1.0,
+            smoothMovement: true,
+            smoothness: 0.3,
+            tiltAngle: 15,
+            tiltSpeed: 10,
+            offsetX: 0,
+            offsetY: 0,
+            handScale: 1.0,
+            tabletScale: 1.0,
+            tabletOffsetY: 50,
+            showHand: true,
+            showTablet: true,
+            showStatus: false,
+            // 画面端制限
+            limitLeft: 0,
+            limitRight: 1920,
+            limitTop: 0,
+            limitBottom: 1080,
+            enableLimits: false
+        };
+
+        let settings = { ...DEFAULT_SETTINGS };
+
+        // ================== 状態管理 ==================
+        const state = {
+            mouseX: 0,
+            mouseY: 0,
+            targetX: 0,
+            targetY: 0,
+            currentX: 0,
+            currentY: 0,
+            isDrawing: false,
+            currentRotation: 0,
+            targetRotation: 0,
+            frameCount: 0,
+            handImage: null,
+            tabletImage: null
+        };
+
+        // ================== DOM要素 ==================
+        const elements = {
+            hand: document.getElementById('hand'),
+            tablet: document.getElementById('tablet'),
+            settingsPanel: document.getElementById('settings-panel'),
+            settingsToggle: document.getElementById('settings-toggle'),
+            initialSetup: document.getElementById('initial-setup'),
+            statusBar: document.getElementById('status-bar'),
+            
+            // 設定入力
+            handUpload: document.getElementById('hand-upload'),
+            tabletUpload: document.getElementById('tablet-upload'),
+            sensitivity: document.getElementById('sensitivity'),
+            smoothMovement: document.getElementById('smooth-movement'),
+            smoothness: document.getElementById('smoothness'),
+            tiltAngle: document.getElementById('tilt-angle'),
+            tiltSpeed: document.getElementById('tilt-speed'),
+            offsetX: document.getElementById('offset-x'),
+            offsetY: document.getElementById('offset-y'),
+            handScale: document.getElementById('hand-scale'),
+            tabletScale: document.getElementById('tablet-scale'),
+            tabletOffsetY: document.getElementById('tablet-offset-y'),
+            showHand: document.getElementById('show-hand'),
+            showTablet: document.getElementById('show-tablet'),
+            showStatus: document.getElementById('show-status'),
+            enableLimits: document.getElementById('enable-limits'),
+            limitLeft: document.getElementById('limit-left'),
+            limitRight: document.getElementById('limit-right'),
+            limitTop: document.getElementById('limit-top'),
+            limitBottom: document.getElementById('limit-bottom'),
+            
+            // プレビュー
+            handPreview: document.getElementById('hand-preview'),
+            tabletPreview: document.getElementById('tablet-preview'),
+            
+            // ボタン
+            saveSettings: document.getElementById('save-settings'),
+            resetSettings: document.getElementById('reset-settings'),
+            clearImages: document.getElementById('clear-images'),
+            startAnimatorBtn: document.getElementById('start-animator-btn')
+        };
+
+        // ================== ユーティリティ ==================
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function saveToLocalStorage() {
+            try {
+                localStorage.setItem('drawingHandSettings', JSON.stringify(settings));
+                if (state.handImage) {
+                    localStorage.setItem('drawingHandImage', state.handImage);
+                }
+                if (state.tabletImage) {
+                    localStorage.setItem('drawingTabletImage', state.tabletImage);
+                }
+                showNotification('設定を保存しました');
+            } catch (e) {
+                console.error('保存エラー:', e);
+                showNotification('保存に失敗しました', 'error');
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const savedSettings = localStorage.getItem('drawingHandSettings');
+                if (savedSettings) {
+                    settings = { ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) };
+                }
+                
+                const savedHandImage = localStorage.getItem('drawingHandImage');
+                if (savedHandImage) {
+                    state.handImage = savedHandImage;
+                    elements.hand.src = savedHandImage;
+                    elements.hand.style.display = 'block';
+                    updatePreview('hand', savedHandImage);
+                }
+                
+                const savedTabletImage = localStorage.getItem('drawingTabletImage');
+                if (savedTabletImage) {
+                    state.tabletImage = savedTabletImage;
+                    elements.tablet.src = savedTabletImage;
+                    elements.tablet.style.display = 'block';
+                    updatePreview('tablet', savedTabletImage);
+                }
+                
+                updateUIFromSettings();
+            } catch (e) {
+                console.error('読み込みエラー:', e);
+            }
+        }
+
+        function updateUIFromSettings() {
+            elements.sensitivity.value = settings.sensitivity;
+            elements.smoothMovement.checked = settings.smoothMovement;
+            elements.smoothness.value = settings.smoothness;
+            elements.tiltAngle.value = settings.tiltAngle;
+            elements.tiltSpeed.value = settings.tiltSpeed;
+            elements.offsetX.value = settings.offsetX;
+            elements.offsetY.value = settings.offsetY;
+            elements.handScale.value = settings.handScale;
+            elements.tabletScale.value = settings.tabletScale;
+            elements.tabletOffsetY.value = settings.tabletOffsetY;
+            elements.showHand.checked = settings.showHand;
+            elements.showTablet.checked = settings.showTablet;
+            elements.showStatus.checked = settings.showStatus;
+            elements.enableLimits.checked = settings.enableLimits;
+            elements.limitLeft.value = settings.limitLeft;
+            elements.limitRight.value = settings.limitRight;
+            elements.limitTop.value = settings.limitTop;
+            elements.limitBottom.value = settings.limitBottom;
+            
+            updateValueDisplays();
+            updateVisibility();
+        }
+
+        function updateValueDisplays() {
+            document.getElementById('sensitivity-value').textContent = settings.sensitivity.toFixed(1);
+            document.getElementById('smoothness-value').textContent = settings.smoothness.toFixed(2);
+            document.getElementById('tilt-angle-value').textContent = settings.tiltAngle + '°';
+            document.getElementById('tilt-speed-value').textContent = settings.tiltSpeed;
+            document.getElementById('offset-x-value').textContent = settings.offsetX;
+            document.getElementById('offset-y-value').textContent = settings.offsetY;
+            document.getElementById('hand-scale-value').textContent = settings.handScale.toFixed(1) + 'x';
+            document.getElementById('tablet-scale-value').textContent = settings.tabletScale.toFixed(1) + 'x';
+            document.getElementById('tablet-offset-y-value').textContent = settings.tabletOffsetY;
+            document.getElementById('limit-left-value').textContent = settings.limitLeft;
+            document.getElementById('limit-right-value').textContent = settings.limitRight;
+            document.getElementById('limit-top-value').textContent = settings.limitTop;
+            document.getElementById('limit-bottom-value').textContent = settings.limitBottom;
+        }
+
+        function updatePreview(type, dataUrl) {
+            const previewContainer = type === 'hand' ? elements.handPreview : elements.tabletPreview;
+            previewContainer.innerHTML = `<img src="${dataUrl}" class="preview-image" alt="${type} preview">`;
+        }
+
+        function updateVisibility() {
+            elements.hand.style.display = settings.showHand && state.handImage ? 'block' : 'none';
+            elements.tablet.style.display = settings.showTablet && state.tabletImage ? 'block' : 'none';
+            elements.statusBar.classList.toggle('show', settings.showStatus);
+        }
+
+        function showNotification(message, type = 'success') {
+            // 簡易通知（将来的にトースト通知を実装可能）
+            console.log(`[${type}] ${message}`);
+        }
+
+        // ================== 画像アップロード ==================
+        function handleImageUpload(type, file) {
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target.result;
+                
+                if (type === 'hand') {
+                    state.handImage = dataUrl;
+                    elements.hand.src = dataUrl;
+                    elements.hand.style.display = 'block';
+                    updatePreview('hand', dataUrl);
+                } else {
+                    state.tabletImage = dataUrl;
+                    elements.tablet.src = dataUrl;
+                    elements.tablet.style.display = 'block';
+                    updatePreview('tablet', dataUrl);
+                }
+                
+                updateVisibility();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // ================== マウス追跡 ==================
+        document.addEventListener('mousemove', (e) => {
+            state.mouseX = e.clientX;
+            state.mouseY = e.clientY;
+        });
+
+        document.addEventListener('mousedown', () => {
+            state.isDrawing = true;
+        });
+
+        document.addEventListener('mouseup', () => {
+            state.isDrawing = false;
+        });
+
+        // ================== アニメーションループ ==================
+        function updateAnimation() {
+            // 基本ターゲット位置を計算
+            const baseTargetX = state.mouseX * settings.sensitivity + settings.offsetX;
+            const baseTargetY = state.mouseY * settings.sensitivity + settings.offsetY;
+            
+            // ペンの円運動アニメーション（描画中のみ）
+            let circleOffsetX = 0;
+            let circleOffsetY = 0;
+            let targetRotation = 0;
+            
+            if (state.isDrawing && settings.tiltAngle > 0) {
+                state.frameCount += settings.tiltSpeed * 0.1;
+                
+                // 円運動の計算（ペン先を中心に手が円を描く）
+                const angle = state.frameCount;
+                const radius = settings.tiltAngle * 0.8; // 角度から半径を計算
+                
+                // ペン先を固定するため、手の位置をずらす
+                circleOffsetX = Math.sin(angle) * radius;
+                circleOffsetY = Math.cos(angle) * radius * 0.5; // Y方向は控えめに
+                
+                // 手の位置に応じてペンの角度も変える
+                targetRotation = Math.sin(angle) * settings.tiltAngle;
+            }
+            
+            // 円運動のオフセットを加えたターゲット位置
+            state.targetX = baseTargetX + circleOffsetX;
+            state.targetY = baseTargetY + circleOffsetY;
+            
+            // 画面端制限を適用
+            if (settings.enableLimits) {
+                state.targetX = Math.max(settings.limitLeft, Math.min(settings.limitRight, state.targetX));
+                state.targetY = Math.max(settings.limitTop, Math.min(settings.limitBottom, state.targetY));
+            }
+            
+            // スムージング処理
+            if (settings.smoothMovement) {
+                state.currentX = lerp(state.currentX, state.targetX, settings.smoothness);
+                state.currentY = lerp(state.currentY, state.targetY, settings.smoothness);
+            } else {
+                state.currentX = state.targetX;
+                state.currentY = state.targetY;
+            }
+            
+            // 回転のスムージング
+            state.currentRotation = lerp(state.currentRotation, targetRotation, 0.2);
+            
+            // 手の位置と回転を更新
+            if (state.handImage && settings.showHand) {
+                const handTransform = `translate(-50%, -50%) translate(${state.currentX}px, ${state.currentY}px) rotate(${state.currentRotation}deg) scale(${settings.handScale})`;
+                elements.hand.style.transform = handTransform;
+                elements.hand.style.left = '0';
+                elements.hand.style.top = '0';
+            }
+            
+            // タブレットの位置を更新（回転なし、手より下）
+            if (state.tabletImage && settings.showTablet) {
+                const tabletTransform = `translate(-50%, -50%) translate(${state.currentX}px, ${state.currentY + settings.tabletOffsetY}px) scale(${settings.tabletScale})`;
+                elements.tablet.style.transform = tabletTransform;
+                elements.tablet.style.left = '0';
+                elements.tablet.style.top = '0';
+            }
+            
+            // ステータス更新
+            if (settings.showStatus) {
+                document.getElementById('status-mouse').textContent = `${Math.round(state.mouseX)}, ${Math.round(state.mouseY)}`;
+                document.getElementById('status-drawing').textContent = state.isDrawing ? '描画中' : '待機中';
+                document.getElementById('status-rotation').textContent = `${state.currentRotation.toFixed(1)}°`;
+            }
+            
+            requestAnimationFrame(updateAnimation);
+        }
+
+        // ================== イベントリスナー ==================
+        elements.settingsToggle.addEventListener('click', () => {
+            elements.settingsPanel.classList.toggle('open');
+        });
+
+        elements.startAnimatorBtn.addEventListener('click', () => {
+            elements.initialSetup.classList.add('hidden');
+            updateAnimation();
+        });
+
+        elements.handUpload.addEventListener('change', (e) => {
+            handleImageUpload('hand', e.target.files[0]);
+        });
+
+        elements.tabletUpload.addEventListener('change', (e) => {
+            handleImageUpload('tablet', e.target.files[0]);
+        });
+
+        // 設定変更イベント
+        elements.sensitivity.addEventListener('input', (e) => {
+            settings.sensitivity = parseFloat(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.smoothMovement.addEventListener('change', (e) => {
+            settings.smoothMovement = e.target.checked;
+        });
+
+        elements.smoothness.addEventListener('input', (e) => {
+            settings.smoothness = parseFloat(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.tiltAngle.addEventListener('input', (e) => {
+            settings.tiltAngle = parseFloat(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.tiltSpeed.addEventListener('input', (e) => {
+            settings.tiltSpeed = parseFloat(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.offsetX.addEventListener('input', (e) => {
+            settings.offsetX = parseInt(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.offsetY.addEventListener('input', (e) => {
+            settings.offsetY = parseInt(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.handScale.addEventListener('input', (e) => {
+            settings.handScale = parseFloat(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.tabletScale.addEventListener('input', (e) => {
+            settings.tabletScale = parseFloat(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.tabletOffsetY.addEventListener('input', (e) => {
+            settings.tabletOffsetY = parseInt(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.showHand.addEventListener('change', (e) => {
+            settings.showHand = e.target.checked;
+            updateVisibility();
+        });
+
+        elements.showTablet.addEventListener('change', (e) => {
+            settings.showTablet = e.target.checked;
+            updateVisibility();
+        });
+
+        elements.showStatus.addEventListener('change', (e) => {
+            settings.showStatus = e.target.checked;
+            updateVisibility();
+        });
+
+        elements.enableLimits.addEventListener('change', (e) => {
+            settings.enableLimits = e.target.checked;
+        });
+
+        elements.limitLeft.addEventListener('input', (e) => {
+            settings.limitLeft = parseInt(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.limitRight.addEventListener('input', (e) => {
+            settings.limitRight = parseInt(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.limitTop.addEventListener('input', (e) => {
+            settings.limitTop = parseInt(e.target.value);
+            updateValueDisplays();
+        });
+
+        elements.limitBottom.addEventListener('input', (e) => {
+            settings.limitBottom = parseInt(e.target.value);
+            updateValueDisplays();
+        });
+
+        // ボタンイベント
+        elements.saveSettings.addEventListener('click', () => {
+            saveToLocalStorage();
+        });
+
+        elements.resetSettings.addEventListener('click', () => {
+            if (confirm('設定をリセットしますか？（画像は保持されます）')) {
+                settings = { ...DEFAULT_SETTINGS };
+                updateUIFromSettings();
+                saveToLocalStorage();
+                showNotification('設定をリセットしました');
+            }
+        });
+
+        elements.clearImages.addEventListener('click', () => {
+            if (confirm('アップロードした画像をクリアしますか？')) {
+                state.handImage = null;
+                state.tabletImage = null;
+                elements.hand.src = '';
+                elements.tablet.src = '';
+                elements.hand.style.display = 'none';
+                elements.tablet.style.display = 'none';
+                elements.handPreview.innerHTML = '<div class="no-image-text">画像を選択してください</div>';
+                elements.tabletPreview.innerHTML = '<div class="no-image-text">画像を選択してください</div>';
+                localStorage.removeItem('drawingHandImage');
+                localStorage.removeItem('drawingTabletImage');
+                showNotification('画像をクリアしました');
+            }
+        });
+
+        // ================== 初期化 ==================
+        window.addEventListener('load', () => {
+            loadFromLocalStorage();
+        });
+
+        // OBSブラウザソース用の自動開始
+        if (window.obsstudio) {
+            elements.initialSetup.classList.add('hidden');
+            updateAnimation();
+        }
+    </script>
+</body>
+</html>
